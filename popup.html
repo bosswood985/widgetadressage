@@ -225,9 +225,8 @@
     </div>
 
     <!-- Scripts -->
-    <!-- Note: Papa Parse is loaded from CDN for simplicity. For production Chrome Web Store submission,
-         consider bundling it locally to comply with CSP requirements and avoid external dependencies -->
-    <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+    <!-- Papa Parse is bundled locally to comply with Chrome Extension CSP requirements -->
+    <script src="js/papaparse.min.js"></script>
     <script src="js/templates.js"></script>
     <script src="js/settings.js"></script>
     <script src="js/csv-parser.js"></script>

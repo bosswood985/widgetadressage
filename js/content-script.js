@@ -74,10 +74,14 @@
         const fieldMappings = {
             'date de naissance': 'date_naissance',
             'né(e) le': 'date_naissance',
+            'né(e)': 'date_naissance',
             'birthdate': 'date_naissance',
+            'tél (portable)': 'telephone',
+            'tél (fixe)': 'telephone',
             'téléphone': 'telephone',
             'phone': 'telephone',
             'mobile': 'telephone',
+            'portable': 'telephone',
             'email': 'email',
             'e-mail': 'email',
             'adresse': 'adresse',
@@ -88,6 +92,7 @@
             'sécurité sociale': 'numero_secu',
             'n° sécu': 'numero_secu',
             'nir': 'numero_secu'
+            // Note: 'lieu de naissance' (birthplace) is not mapped as it differs from 'ville' (current city)
         };
         
         // Search for all text nodes that might be labels
