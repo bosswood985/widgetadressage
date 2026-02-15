@@ -28,20 +28,64 @@ const CSVParser = {
     
     // Parser le fichier CSV avec Papa Parse
     parseCSV(file) {
-        Papa.parse(file, {
-            header: true,
-            skipEmptyLines: true,
-            encoding: 'UTF-8',
-            complete: (results) => {
-                this.patients = results.data;
-                this.filteredPatients = [...this.patients];
-                this.displayPatients();
-                this.showPatientsSection();
-            },
-            error: (error) => {
-                alert('Erreur lors de l\'import du CSV : ' + error.message);
-            }
-        });
+        // Check if Papa Parse is available, otherwise use fallback
+        if (typeof Papa !== 'undefined') {
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                encoding: 'UTF-8',
+                complete: (results) => {
+                    this.patients = results.data;
+                    this.filteredPatients = [...this.patients];
+                    this.displayPatients();
+                    this.showPatientsSection();
+                },
+                error: (error) => {
+                    alert('Erreur lors de l\'import du CSV : ' + error.message);
+                }
+            });
+        } else {
+            // Fallback: simple CSV parser
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const csv = e.target.result;
+                    const results = this.parseCSVManually(csv);
+                    this.patients = results;
+                    this.filteredPatients = [...this.patients];
+                    this.displayPatients();
+                    this.showPatientsSection();
+                } catch (error) {
+                    alert('Erreur lors de l\'import du CSV : ' + error.message);
+                }
+            };
+            reader.readAsText(file, 'UTF-8');
+        }
+    },
+    
+    // Simple CSV parser fallback
+    parseCSVManually(csv) {
+        const lines = csv.split('\n');
+        if (lines.length < 2) return [];
+        
+        // Get headers
+        const headers = lines[0].split(',').map(h => h.trim());
+        
+        // Parse rows
+        const results = [];
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            
+            const values = line.split(',').map(v => v.trim());
+            const row = {};
+            headers.forEach((header, index) => {
+                row[header] = values[index] || '';
+            });
+            results.push(row);
+        }
+        
+        return results;
     },
     
     // Afficher la section patients
