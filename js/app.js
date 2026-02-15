@@ -72,14 +72,15 @@ document.addEventListener('DOMContentLoaded', function() {
         return true;
     }
     
-    // Ajouter la validation au bouton d'envoi
+    // Hook into the send email button to add validation
     const sendEmailBtn = document.getElementById('sendEmailBtn');
-    const originalSendHandler = sendEmailBtn.onclick;
-    sendEmailBtn.onclick = function() {
+    sendEmailBtn.addEventListener('click', function(e) {
+        // Prevent default and validate first
+        e.stopImmediatePropagation();
         if (validateForm()) {
             EmailHandler.sendEmail();
         }
-    };
+    }, true); // Use capture phase to run before other handlers
     
     // Gestion du raccourci clavier Escape pour fermer les modales
     document.addEventListener('keydown', function(e) {

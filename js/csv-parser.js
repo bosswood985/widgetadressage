@@ -64,11 +64,13 @@ const CSVParser = {
     },
     
     // Simple CSV parser fallback
+    // Note: This is a basic parser that doesn't handle quoted fields with commas.
+    // For production use, Papa Parse library should be loaded from CDN.
     parseCSVManually(csv) {
         const lines = csv.split('\n');
         if (lines.length < 2) return [];
         
-        // Get headers
+        // Get headers - simple split (doesn't handle quotes)
         const headers = lines[0].split(',').map(h => h.trim());
         
         // Parse rows
@@ -77,6 +79,7 @@ const CSVParser = {
             const line = lines[i].trim();
             if (!line) continue;
             
+            // Simple split - doesn't handle quoted fields with commas
             const values = line.split(',').map(v => v.trim());
             const row = {};
             headers.forEach((header, index) => {

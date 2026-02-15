@@ -1,13 +1,22 @@
 // email.js - Gestion de la génération et envoi d'email
 
 const EmailHandler = {
-    // Mapper les valeurs d'urgence vers leur texte
+    // Mapper les valeurs d'urgence vers leur texte et emoji
     urgencyLabels: {
         'very-urgent': '🔴 Très Urgent - Prise en charge immédiate nécessaire',
         'urgent': '🟠 Urgent - Sous 48h',
         'semi-urgent': '🟡 Semi-urgent - Sous 1 semaine',
         'normal': '🟢 Normal - Consultation programmée',
         'follow-up': '🔵 Suivi - Consultation de suivi'
+    },
+    
+    // Emoji seulement pour les sujets d'email
+    urgencyEmojis: {
+        'very-urgent': '🔴 Très Urgent',
+        'urgent': '🟠 Urgent',
+        'semi-urgent': '🟡 Semi-urgent',
+        'normal': '🟢 Normal',
+        'follow-up': '🔵 Suivi'
     },
     
     // Mapper les valeurs de type de prise en charge vers leur texte
@@ -102,7 +111,7 @@ const EmailHandler = {
         const urgencyValue = document.getElementById('urgencyLevel').value;
         const reasonValue = document.getElementById('referralReason').value;
         
-        const urgencyText = this.urgencyLabels[urgencyValue] || urgencyValue;
+        const urgencyText = this.urgencyEmojis[urgencyValue] || urgencyValue;
         const reasonText = this.reasonLabels[reasonValue] || reasonValue;
         
         const patientName = `${patient.prenom || ''} ${patient.nom || ''}`.trim();

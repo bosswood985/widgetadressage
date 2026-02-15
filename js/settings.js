@@ -80,9 +80,10 @@ const Settings = {
         return errors;
     },
     
-    // Vérifier si un email est valide
+    // Vérifier si un email est valide (improved regex)
     isValidEmail(email) {
-        const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        // More comprehensive email validation
+        const re = /^[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
         return re.test(email);
     }
 };
@@ -128,11 +129,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Vérifier si les paramètres sont configurés au démarrage
     const settings = Settings.load();
     if (!settings.doctorName || !settings.recipientEmail) {
+        // Show settings modal after a short delay
         setTimeout(() => {
-            if (confirm('Paramètres non configurés. Voulez-vous les configurer maintenant ?')) {
-                Settings.initUI();
-                document.getElementById('settingsModal').classList.add('active');
-            }
+            Settings.initUI();
+            document.getElementById('settingsModal').classList.add('active');
         }, 1000);
     }
 });
