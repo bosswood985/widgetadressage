@@ -158,11 +158,15 @@
         if (parts.length >= 2) {
             // Assume "Prénom NOM" or "NOM Prénom"
             // French names: typically uppercase = NOM, mixed case = Prénom
-            if (parts[parts.length - 1] === parts[parts.length - 1].toUpperCase()) {
+            // Check if part contains actual letters before applying uppercase test
+            const hasLetters = (str) => /[a-zA-Z]/.test(str);
+            const isAllUppercase = (str) => hasLetters(str) && str === str.toUpperCase() && str === str.toUpperCase();
+            
+            if (isAllUppercase(parts[parts.length - 1])) {
                 // Last part is uppercase, likely NOM
                 result.nom = parts[parts.length - 1];
                 result.prenom = parts.slice(0, -1).join(' ');
-            } else if (parts[0] === parts[0].toUpperCase()) {
+            } else if (isAllUppercase(parts[0])) {
                 // First part is uppercase, likely NOM
                 result.nom = parts[0];
                 result.prenom = parts.slice(1).join(' ');
@@ -311,9 +315,12 @@
         init();
     }
     
-    // Also watch for dynamic page changes (SPA navigation)
+    // Watch for SPA navigation using a more efficient approach
+    // Instead of observing all DOM changes, we check URL periodically
     let lastUrl = window.location.href;
-    new MutationObserver(() => {
+    
+    // Check URL every 500ms (more efficient than observing all DOM mutations)
+    setInterval(() => {
         const currentUrl = window.location.href;
         if (currentUrl !== lastUrl) {
             lastUrl = currentUrl;
@@ -324,6 +331,6 @@
             // Re-initialize
             setTimeout(init, 1000); // Wait for page to load
         }
-    }).observe(document, { subtree: true, childList: true });
+    }, 500);
     
 })();

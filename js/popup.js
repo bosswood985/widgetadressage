@@ -1,6 +1,9 @@
 // popup.js - Extension popup logic
 // Handles auto-fill from Doctolib content script and CSV fallback
 
+// Constants
+const DATA_EXPIRATION_MS = 5 * 60 * 1000; // 5 minutes
+
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Widget d\'Adressage Patient (Extension) - Initialisé');
     
@@ -115,8 +118,8 @@ function checkForAutoExtractedData() {
             const timestamp = result.extractionTimestamp || 0;
             const age = Date.now() - timestamp;
             
-            // Only use data if it's less than 5 minutes old
-            if (age < 5 * 60 * 1000) {
+            // Only use data if it's less than DATA_EXPIRATION_MS old
+            if (age < DATA_EXPIRATION_MS) {
                 console.log('Auto-extracted patient data found:', result.lastExtractedPatient);
                 displayAutoExtractedData(result.lastExtractedPatient);
                 dataSourceInfo.innerHTML = '✅ <strong>Données extraites depuis Doctolib</strong> - Cliquez sur "Utiliser ces données" ou importez un CSV.';
@@ -205,14 +208,17 @@ function usePatientData(patientData) {
     document.getElementById('referralSection').scrollIntoView({ behavior: 'smooth' });
 }
 
-// Listen for messages from content script
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    console.log('Popup received message:', request);
-    
-    if (request.action === 'patientDataExtracted') {
-        displayAutoExtractedData(request.data);
-        sendResponse({ success: true });
-    }
-    
-    return true;
-});
+// Listen for messages from content script (global scope, not in DOMContentLoaded)
+// This ensures it only registers once, not every time popup opens
+if (typeof chrome !== 'undefined' && chrome.runtime) {
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        console.log('Popup received message:', request);
+        
+        if (request.action === 'patientDataExtracted') {
+            displayAutoExtractedData(request.data);
+            sendResponse({ success: true });
+        }
+        
+        return true;
+    });
+}

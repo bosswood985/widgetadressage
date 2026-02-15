@@ -33,7 +33,9 @@ const Settings = {
                 });
             } else {
                 // Synchronous fallback for compatibility
-                console.warn('load() called without callback in extension mode, returning defaults');
+                // WARNING: When in extension mode, you MUST use the callback parameter
+                // to receive the actual settings. This synchronous return only contains defaults.
+                console.warn('load() called without callback in extension mode. Use load(callback) to get actual settings from chrome.storage.');
                 return { ...this.defaults };
             }
         } else {
