@@ -21,6 +21,7 @@ Thumbs.db
 # Test files
 coverage/
 .nyc_output/
+test-patients.csv
 
 # Environment files
 .env
