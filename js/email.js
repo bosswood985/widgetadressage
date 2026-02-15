@@ -45,49 +45,54 @@ const EmailHandler = {
     },
     
     // Générer le courrier complet
-    generateLetter() {
+    generateLetter(callback) {
         const patient = CSVParser.getSelectedPatient();
         if (!patient) {
             alert('Veuillez sélectionner un patient.');
+            if (callback) callback(null);
             return null;
         }
         
-        const settings = Settings.load();
-        const urgencyValue = document.getElementById('urgencyLevel').value;
-        const careTypeValue = document.getElementById('careType').value;
-        const letterContent = document.getElementById('letterContent').value;
-        
-        if (!urgencyValue || !careTypeValue || !letterContent) {
-            alert('Veuillez remplir tous les champs obligatoires.');
-            return null;
-        }
-        
-        const urgencyText = this.urgencyLabels[urgencyValue] || urgencyValue;
-        let careTypeText = this.careTypeLabels[careTypeValue] || careTypeValue;
-        
-        // Si "Autre" est sélectionné, utiliser le champ personnalisé
-        if (careTypeValue === 'other') {
-            const otherText = document.getElementById('careTypeOther').value.trim();
-            if (otherText) {
-                careTypeText = otherText;
+        Settings.load((settings) => {
+            const urgencyValue = document.getElementById('urgencyLevel').value;
+            const careTypeValue = document.getElementById('careType').value;
+            const letterContent = document.getElementById('letterContent').value;
+            
+            if (!urgencyValue || !careTypeValue || !letterContent) {
+                alert('Veuillez remplir tous les champs obligatoires.');
+                if (callback) callback(null);
+                return;
             }
-        }
-        
-        const header = formatLetterHeader(settings, patient, urgencyText, careTypeText);
-        const footer = formatLetterFooter(settings);
-        
-        return header + letterContent + footer;
+            
+            const urgencyText = this.urgencyLabels[urgencyValue] || urgencyValue;
+            let careTypeText = this.careTypeLabels[careTypeValue] || careTypeValue;
+            
+            // Si "Autre" est sélectionné, utiliser le champ personnalisé
+            if (careTypeValue === 'other') {
+                const otherText = document.getElementById('careTypeOther').value.trim();
+                if (otherText) {
+                    careTypeText = otherText;
+                }
+            }
+            
+            const header = formatLetterHeader(settings, patient, urgencyText, careTypeText);
+            const footer = formatLetterFooter(settings);
+            const letter = header + letterContent + footer;
+            
+            if (callback) callback(letter);
+        });
     },
     
     // Prévisualiser le courrier
     preview() {
-        const letter = this.generateLetter();
-        if (!letter) return;
-        
-        const previewContent = document.getElementById('previewContent');
-        previewContent.textContent = letter;
-        
-        document.getElementById('previewModal').classList.add('active');
+        this.generateLetter((letter) => {
+            if (!letter) return;
+            
+            const previewContent = document.getElementById('previewContent');
+            previewContent.textContent = letter;
+            
+            document.getElementById('previewModal').classList.add('active');
+        });
     },
     
     // Envoyer par email (mailto:)
@@ -98,32 +103,34 @@ const EmailHandler = {
             return;
         }
         
-        const settings = Settings.load();
-        if (!settings.recipientEmail) {
-            alert('Veuillez configurer l\'email du destinataire dans les paramètres.');
-            document.getElementById('settingsModal').classList.add('active');
-            return;
-        }
-        
-        const letter = this.generateLetter();
-        if (!letter) return;
-        
-        const urgencyValue = document.getElementById('urgencyLevel').value;
-        const reasonValue = document.getElementById('referralReason').value;
-        
-        const urgencyText = this.urgencyEmojis[urgencyValue] || urgencyValue;
-        const reasonText = this.reasonLabels[reasonValue] || reasonValue;
-        
-        const patientName = `${patient.prenom || ''} ${patient.nom || ''}`.trim();
-        
-        // Générer le sujet
-        const subject = `[${urgencyText.split(' - ')[0]}] Adressage - ${reasonText} - Patient ${patientName}`;
-        
-        // Encoder le mailto
-        const mailtoLink = `mailto:${encodeURIComponent(settings.recipientEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(letter)}`;
-        
-        // Ouvrir le client mail
-        window.location.href = mailtoLink;
+        Settings.load((settings) => {
+            if (!settings.recipientEmail) {
+                alert('Veuillez configurer l\'email du destinataire dans les paramètres.');
+                document.getElementById('settingsModal').classList.add('active');
+                return;
+            }
+            
+            this.generateLetter((letter) => {
+                if (!letter) return;
+                
+                const urgencyValue = document.getElementById('urgencyLevel').value;
+                const reasonValue = document.getElementById('referralReason').value;
+                
+                const urgencyText = this.urgencyEmojis[urgencyValue] || urgencyValue;
+                const reasonText = this.reasonLabels[reasonValue] || reasonValue;
+                
+                const patientName = `${patient.prenom || ''} ${patient.nom || ''}`.trim();
+                
+                // Générer le sujet
+                const subject = `[${urgencyText.split(' - ')[0]}] Adressage - ${reasonText} - Patient ${patientName}`;
+                
+                // Encoder le mailto
+                const mailtoLink = `mailto:${encodeURIComponent(settings.recipientEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(letter)}`;
+                
+                // Ouvrir le client mail
+                window.location.href = mailtoLink;
+            });
+        });
     }
 };
 

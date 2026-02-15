@@ -1,7 +1,7 @@
-// settings.js - Gestion des paramètres utilisateur avec localStorage
+// settings.js - Gestion des paramètres utilisateur avec chrome.storage ou localStorage
 
 const Settings = {
-    // Clé localStorage
+    // Clé storage
     STORAGE_KEY: 'widgetAdressageSettings',
     
     // Paramètres par défaut
@@ -14,41 +14,82 @@ const Settings = {
         recipientEmail: ''
     },
     
+    // Detect if chrome.storage is available (extension context)
+    isExtension() {
+        return typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local;
+    },
+    
     // Charger les paramètres
-    load() {
-        try {
-            const stored = localStorage.getItem(this.STORAGE_KEY);
-            if (stored) {
-                return { ...this.defaults, ...JSON.parse(stored) };
+    load(callback) {
+        // If callback is provided, use async mode (for extension)
+        // If not, use sync mode (for standalone)
+        
+        if (this.isExtension()) {
+            // Extension mode: use chrome.storage.local (async)
+            if (callback) {
+                chrome.storage.local.get([this.STORAGE_KEY], (result) => {
+                    const settings = result[this.STORAGE_KEY] || {};
+                    callback({ ...this.defaults, ...settings });
+                });
+            } else {
+                // Synchronous fallback for compatibility
+                console.warn('load() called without callback in extension mode, returning defaults');
+                return { ...this.defaults };
             }
-        } catch (e) {
-            console.error('Erreur lors du chargement des paramètres:', e);
+        } else {
+            // Standalone mode: use localStorage (sync)
+            try {
+                const stored = localStorage.getItem(this.STORAGE_KEY);
+                const settings = stored ? JSON.parse(stored) : {};
+                const result = { ...this.defaults, ...settings };
+                if (callback) {
+                    callback(result);
+                }
+                return result;
+            } catch (e) {
+                console.error('Erreur lors du chargement des paramètres:', e);
+                const result = { ...this.defaults };
+                if (callback) {
+                    callback(result);
+                }
+                return result;
+            }
         }
-        return { ...this.defaults };
     },
     
     // Sauvegarder les paramètres
-    save(settings) {
-        try {
-            localStorage.setItem(this.STORAGE_KEY, JSON.stringify(settings));
-            return true;
-        } catch (e) {
-            console.error('Erreur lors de la sauvegarde des paramètres:', e);
-            return false;
+    save(settings, callback) {
+        if (this.isExtension()) {
+            // Extension mode: use chrome.storage.local
+            chrome.storage.local.set({ [this.STORAGE_KEY]: settings }, () => {
+                console.log('Paramètres sauvegardés dans chrome.storage');
+                if (callback) callback(true);
+            });
+        } else {
+            // Standalone mode: use localStorage
+            try {
+                localStorage.setItem(this.STORAGE_KEY, JSON.stringify(settings));
+                if (callback) callback(true);
+                return true;
+            } catch (e) {
+                console.error('Erreur lors de la sauvegarde des paramètres:', e);
+                if (callback) callback(false);
+                return false;
+            }
         }
     },
     
     // Initialiser l'interface des paramètres
     initUI() {
-        const settings = this.load();
-        
-        // Remplir les champs du formulaire
-        document.getElementById('doctorName').value = settings.doctorName || '';
-        document.getElementById('doctorSpecialty').value = settings.doctorSpecialty || 'Médecin généraliste';
-        document.getElementById('doctorRPPS').value = settings.doctorRPPS || '';
-        document.getElementById('practiceAddress').value = settings.practiceAddress || '';
-        document.getElementById('practicePhone').value = settings.practicePhone || '';
-        document.getElementById('recipientEmail').value = settings.recipientEmail || '';
+        this.load((settings) => {
+            // Remplir les champs du formulaire
+            document.getElementById('doctorName').value = settings.doctorName || '';
+            document.getElementById('doctorSpecialty').value = settings.doctorSpecialty || 'Médecin généraliste';
+            document.getElementById('doctorRPPS').value = settings.doctorRPPS || '';
+            document.getElementById('practiceAddress').value = settings.practiceAddress || '';
+            document.getElementById('practicePhone').value = settings.practicePhone || '';
+            document.getElementById('recipientEmail').value = settings.recipientEmail || '';
+        });
     },
     
     // Récupérer les paramètres depuis le formulaire
@@ -118,21 +159,24 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        if (Settings.save(settings)) {
-            alert('Paramètres enregistrés avec succès !');
-            document.getElementById('settingsModal').classList.remove('active');
-        } else {
-            alert('Erreur lors de la sauvegarde des paramètres.');
-        }
+        Settings.save(settings, (success) => {
+            if (success) {
+                alert('Paramètres enregistrés avec succès !');
+                document.getElementById('settingsModal').classList.remove('active');
+            } else {
+                alert('Erreur lors de la sauvegarde des paramètres.');
+            }
+        });
     });
     
     // Vérifier si les paramètres sont configurés au démarrage
-    const settings = Settings.load();
-    if (!settings.doctorName || !settings.recipientEmail) {
-        // Show settings modal after a short delay
-        setTimeout(() => {
-            Settings.initUI();
-            document.getElementById('settingsModal').classList.add('active');
-        }, 1000);
-    }
+    Settings.load((settings) => {
+        if (!settings.doctorName || !settings.recipientEmail) {
+            // Show settings modal after a short delay
+            setTimeout(() => {
+                Settings.initUI();
+                document.getElementById('settingsModal').classList.add('active');
+            }, 1000);
+        }
+    });
 });
