@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Widget d'Adressage Patient - Ophtalmologie</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <h1>Widget d'Adressage Patient</h1>
+            <p class="subtitle">Ophtalmologie</p>
+            <button id="settingsBtn" class="settings-btn">⚙️ Paramètres</button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Section 1: Import CSV -->
+        <section class="card">
+            <h2>1. Import CSV Doctolib</h2>
+            <div class="upload-area">
+                <input type="file" id="csvFileInput" accept=".csv" hidden>
+                <button id="uploadBtn" class="btn btn-primary">📁 Importer un fichier CSV</button>
+                <p class="help-text">Format attendu : CSV Doctolib avec colonnes nom, prénom, date_naissance, etc.</p>
+            </div>
+        </section>
+
+        <!-- Section 2: Liste des patients -->
+        <section class="card" id="patientsSection" style="display: none;">
+            <h2>2. Sélection du Patient</h2>
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="🔍 Rechercher un patient (nom, prénom)..." class="search-input">
+            </div>
+            <div class="table-container">
+                <table id="patientsTable">
+                    <thead>
+                        <tr>
+                            <th>Civilité</th>
+                            <th>Nom</th>
+                            <th>Prénom</th>
+                            <th>Date de naissance</th>
+                            <th>Téléphone</th>
+                            <th>Email</th>
+                        </tr>
+                    </thead>
+                    <tbody id="patientsTableBody">
+                    </tbody>
+                </table>
+            </div>
+            <div id="patientCount" class="patient-count"></div>
+        </section>
+
+        <!-- Section 3: Formulaire d'adressage -->
+        <section class="card" id="referralSection" style="display: none;">
+            <h2>3. Formulaire d'Adressage</h2>
+            
+            <!-- Patient sélectionné -->
+            <div class="selected-patient" id="selectedPatientDisplay">
+                <h3>Patient sélectionné</h3>
+                <div id="selectedPatientInfo"></div>
+            </div>
+
+            <!-- Degré d'urgence -->
+            <div class="form-group">
+                <label for="urgencyLevel">Degré d'urgence *</label>
+                <select id="urgencyLevel" class="form-select" required>
+                    <option value="">-- Sélectionner --</option>
+                    <option value="very-urgent">🔴 Très Urgent - Prise en charge immédiate nécessaire</option>
+                    <option value="urgent">🟠 Urgent - Sous 48h</option>
+                    <option value="semi-urgent">🟡 Semi-urgent - Sous 1 semaine</option>
+                    <option value="normal">🟢 Normal - Consultation programmée</option>
+                    <option value="follow-up">🔵 Suivi - Consultation de suivi</option>
+                </select>
+            </div>
+
+            <!-- Type de prise en charge -->
+            <div class="form-group">
+                <label for="careType">Type de prise en charge souhaitée *</label>
+                <select id="careType" class="form-select" required>
+                    <option value="">-- Sélectionner --</option>
+                    <option value="specialized-advice">Avis spécialisé</option>
+                    <option value="complementary-assessment">Bilan complémentaire</option>
+                    <option value="surgical-care">Prise en charge chirurgicale</option>
+                    <option value="intravitreal-injection">Injection intravitréenne</option>
+                    <option value="laser">Laser</option>
+                    <option value="functional-exploration">Exploration fonctionnelle</option>
+                    <option value="post-operative-follow-up">Suivi post-opératoire</option>
+                    <option value="other">Autre (à préciser)</option>
+                </select>
+            </div>
+            <div class="form-group" id="careTypeOtherGroup" style="display: none;">
+                <input type="text" id="careTypeOther" class="form-input" placeholder="Préciser le type de prise en charge...">
+            </div>
+
+            <!-- Motif d'adressage -->
+            <div class="form-group">
+                <label for="referralReason">Motif d'adressage *</label>
+                <select id="referralReason" class="form-select" required>
+                    <option value="">-- Sélectionner --</option>
+                    <option value="cataract">Cataracte</option>
+                    <option value="glaucoma">Glaucome</option>
+                    <option value="amd">DMLA</option>
+                    <option value="diabetic-retinopathy">Rétinopathie diabétique</option>
+                    <option value="retinal-detachment">Décollement de rétine</option>
+                    <option value="keratoconus">Kératocône</option>
+                    <option value="strabismus">Strabisme</option>
+                    <option value="eyelid-pathology">Pathologie palpébrale</option>
+                    <option value="other">Autre</option>
+                </select>
+            </div>
+
+            <!-- Texte du courrier -->
+            <div class="form-group">
+                <label for="letterContent">Courrier d'adressage *</label>
+                <textarea id="letterContent" class="form-textarea" rows="10" placeholder="Le texte type sera généré automatiquement selon le motif sélectionné. Vous pouvez le personnaliser." required></textarea>
+                <p class="help-text">Les champs entre crochets [...] sont à compléter manuellement</p>
+            </div>
+
+            <!-- Boutons d'action -->
+            <div class="actions">
+                <button id="previewBtn" class="btn btn-secondary">👁️ Prévisualiser</button>
+                <button id="sendEmailBtn" class="btn btn-primary">📧 Envoyer par Email</button>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal Paramètres -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Paramètres</h2>
+                <button class="modal-close" id="closeSettingsBtn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="doctorName">Nom du praticien *</label>
+                    <input type="text" id="doctorName" class="form-input" placeholder="Dr. Nom Prénom">
+                </div>
+                <div class="form-group">
+                    <label for="doctorSpecialty">Spécialité</label>
+                    <input type="text" id="doctorSpecialty" class="form-input" placeholder="Médecin généraliste" value="Médecin généraliste">
+                </div>
+                <div class="form-group">
+                    <label for="doctorRPPS">RPPS</label>
+                    <input type="text" id="doctorRPPS" class="form-input" placeholder="Numéro RPPS">
+                </div>
+                <div class="form-group">
+                    <label for="practiceAddress">Adresse du cabinet</label>
+                    <textarea id="practiceAddress" class="form-textarea" rows="3" placeholder="Adresse complète du cabinet"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="practicePhone">Téléphone</label>
+                    <input type="tel" id="practicePhone" class="form-input" placeholder="01 02 03 04 05">
+                </div>
+                <div class="form-group">
+                    <label for="recipientEmail">Email du destinataire (ophtalmo) *</label>
+                    <input type="email" id="recipientEmail" class="form-input" placeholder="ophtalmo@example.com">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="saveSettingsBtn" class="btn btn-primary">💾 Enregistrer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Prévisualisation -->
+    <div id="previewModal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>Prévisualisation du courrier</h2>
+                <button class="modal-close" id="closePreviewBtn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="previewContent" class="preview-content"></div>
+            </div>
+            <div class="modal-footer">
+                <button id="closePreviewBtn2" class="btn btn-secondary">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+    <script src="js/templates.js"></script>
+    <script src="js/settings.js"></script>
+    <script src="js/csv-parser.js"></script>
+    <script src="js/email.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
