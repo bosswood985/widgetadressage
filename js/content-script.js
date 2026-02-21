@@ -1,341 +1,213 @@
-// content-script.js - Scrape patient data from Doctolib pages
-// This script runs on all Doctolib pages and extracts patient information
-
-(function() {
+// content-script.js - Extraction simple : civilite, prenom, nom, date_naissance, telephone, email
+// - Préfère sélecteurs structurés (data-test-id) et évite d'agréger tout le DOM
+// - Renvoie le téléphone avec l'indicatif tel qu'il apparaît dans href ("tel:+...") si disponible
+(function () {
     'use strict';
-    
-    console.log('Widget Adressage - Content script loaded on Doctolib');
-    
-    // Configuration
+
     const BUTTON_ID = 'widget-adressage-btn';
     const BUTTON_CONTAINER_ID = 'widget-adressage-container';
-    
-    // State
-    let floatingButton = null;
-    let patientData = null;
-    
-    // Detect if we're on a patient page
-    function isPatientPage() {
-        // Check URL patterns
-        const url = window.location.href;
-        const patientPagePatterns = [
-            /\/patients\/\d+/,
-            /\/patient\//,
-            /\/dossier/,
-            /\/medical-record/
-        ];
-        
-        return patientPagePatterns.some(pattern => pattern.test(url));
+
+    function log(...args) { try { console.log('[Widget Adressage]', ...args); } catch (e) { } }
+
+    // util : texte visible et non bruyant
+    function safeText(el) {
+        if (!el) return null;
+        try {
+            if (el.nodeType !== 1) return null;
+            const tag = el.tagName.toLowerCase();
+            if (['script', 'style', 'iframe', 'noscript'].includes(tag)) return null;
+            const txt = (el.textContent || '').replace(/\u00A0/g, ' ').trim();
+            if (!txt) return null;
+            // filter obvious UI noise
+            if (/Rendez-?vous|VU PAR|Agenda|Historique|Statut du rendez/i.test(txt)) return null;
+            return txt;
+        } catch (e) { return null; }
     }
-    
-    // Extract patient data from the DOM
-    function extractPatientData() {
-        console.log('Attempting to extract patient data...');
-        
-        const data = {
-            civilite: '',
-            nom: '',
-            prenom: '',
-            date_naissance: '',
-            telephone: '',
-            email: '',
-            adresse: '',
-            code_postal: '',
-            ville: '',
-            numero_secu: ''
+
+    // récupère la civilité depuis un élément (e.g. "Madame", "Monsieur")
+    function getCivilite() {
+        const h3 = document.querySelector('.dl-left-panel-patient-card-info h3, .patient-card .dl-text-title, .patient-identity h3, .dl-left-panel-patient-card-info > h3');
+        const txt = safeText(h3);
+        if (!txt) return '';
+        if (/madame/i.test(txt)) return 'Madame';
+        if (/monsieur|m\.|mr\b|monsieur/i.test(txt)) return 'Monsieur';
+        return txt;
+    }
+
+    // récupère nom/prenom : privilégie deux h1 consécutifs (ex: NOM / Prénom) ou h1 splitted
+    function getName() {
+        // try container first
+        const container = document.querySelector('.dl-left-panel-patient-card-info, .patient-card, .patient-header, .dl-profile-header');
+        if (container) {
+            // find h1 inside container
+            const h1s = Array.from(container.querySelectorAll('h1')).map(s => (s.textContent || '').trim()).filter(Boolean);
+            if (h1s.length >= 2) {
+                // common pattern: first = NOM (uppercase), second = prenom
+                const nom = h1s[0];
+                const prenom = h1s[1];
+                return { nom, prenom };
+            }
+            if (h1s.length === 1) {
+                const txt = h1s[0];
+                // If the h1 contains newline pieces, split
+                const pieces = txt.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+                if (pieces.length >= 2) return { nom: pieces[0], prenom: pieces[1] };
+                // otherwise split on space: last token as nom, rest as prenom
+                const parts = txt.split(/\s+/).filter(Boolean);
+                if (parts.length === 1) return { nom: parts[0], prenom: '' };
+                return { prenom: parts.slice(0, -1).join(' '), nom: parts.slice(-1).join(' ') };
+            }
+        }
+
+        // fallback: global h1s on page
+        const globalH1s = Array.from(document.querySelectorAll('h1')).map(s => (s.textContent || '').trim()).filter(Boolean);
+        if (globalH1s.length >= 2) return { nom: globalH1s[0], prenom: globalH1s[1] };
+        if (globalH1s.length === 1) {
+            const txt = globalH1s[0];
+            const parts = txt.split(/\s+/).filter(Boolean);
+            if (parts.length === 1) return { nom: parts[0], prenom: '' };
+            return { prenom: parts.slice(0, -1).join(' '), nom: parts.slice(-1).join(' ') };
+        }
+        return { nom: '', prenom: '' };
+    }
+
+    // récupérer date de naissance : recherche un pattern date typique dans la zone gauche
+    function getDateNaissance() {
+        // search near patient card
+        const leftPanel = document.querySelector('.dl-left-panel-patient-card-info, .dl-left-panel-content, .patient-info, .patient-card');
+        const textToSearch = leftPanel ? (leftPanel.innerText || '') : (document.body.innerText || '');
+        if (!textToSearch) return '';
+        // match dd/mm/yyyy or d/m/yyyy, or "20 novembre 1981" style
+        const dateRegex1 = /(\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b)/;
+        const m1 = textToSearch.match(dateRegex1);
+        if (m1) return m1[1].trim();
+        // try verbose month names (fr)
+        const dateRegex2 = /\b(\d{1,2}\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\s+\d{4})\b/i;
+        const m2 = textToSearch.match(dateRegex2);
+        if (m2) return m2[1].trim();
+        // fallback: look for pattern "F, 20/11/1981"
+        const m3 = textToSearch.match(/([FM]\s*,\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i);
+        if (m3) return m3[1].trim();
+        return '';
+    }
+
+    // telephone : retourne le numéro tel:+... si disponible, sinon le texte visible (espaces normalisés)
+    function getTelephone() {
+        const a = document.querySelector('[data-test-id="phone_number"], a[href^="tel:"]');
+        if (!a) return '';
+        const href = a.getAttribute('href') || '';
+        if (href && href.toLowerCase().startsWith('tel:')) {
+            // return with +country if present (strip the "tel:")
+            return href.replace(/^tel:/i, '');
+        }
+        // fallback displayed text
+        const displayed = (a.textContent || '').replace(/\u00A0/g, ' ').trim();
+        return displayed;
+    }
+
+    // email : prefer mailto:, else nearest labelled value
+    function getEmail() {
+        const mail = document.querySelector('a[href^="mailto:"]');
+        if (mail) {
+            const h = mail.getAttribute('href') || '';
+            const addr = h.replace(/^mailto:/i, '').split('?')[0];
+            return addr.trim();
+        }
+        // else search label "E-mail" near left panel
+        const leftPanel = document.querySelector('.dl-left-panel-patient-card-info, .patient-card, .patient-info');
+        if (leftPanel) {
+            const emailLabel = Array.from(leftPanel.querySelectorAll('div,span,label,dt,dd')).find(el => {
+                const t = (el.textContent || '').toLowerCase();
+                return t.includes('e-mail') || t.includes('email') || t.includes('e mail');
+            });
+            if (emailLabel) {
+                // next sibling or child
+                const next = emailLabel.nextElementSibling;
+                if (next) return (next.textContent || '').trim();
+                // try within same element after colon
+                const txt = (emailLabel.textContent || '');
+                const m = txt.match(/[:：]\s*(\S+@\S+\.\S+)/);
+                if (m) return m[1];
+            }
+        }
+        // last resort: search body for an email
+        const bodyText = document.body.innerText || '';
+        const m = bodyText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+        return m ? m[0] : '';
+    }
+
+    // build final object
+    function extractPatient() {
+        const civilite = getCivilite();
+        const name = getName();
+        const date_naissance = getDateNaissance();
+        const telephone = getTelephone();
+        const email = getEmail();
+
+        return {
+            civilite: civilite || '',
+            prenom: (name.prenom || '').trim(),
+            nom: (name.nom || '').trim(),
+            date_naissance: date_naissance || '',
+            telephone: telephone || '',
+            email: email || ''
         };
-        
-        // Strategy 1: Look for patient info in header/title areas
-        // Doctolib typically shows patient name in page header
-        const titleSelectors = [
-            'h1',
-            '.patient-name',
-            '.patient-header',
-            '[data-test-id="patient-name"]',
-            '.dl-profile-header h1',
-            '.patient-identity h1',
-            '.appointment-patient-name'
-        ];
-        
-        for (const selector of titleSelectors) {
-            const element = document.querySelector(selector);
-            if (element && element.textContent.trim()) {
-                const nameText = element.textContent.trim();
-                // Parse name (typically "Prénom NOM" or "M./Mme NOM Prénom")
-                const nameParts = parseNameFromText(nameText);
-                if (nameParts.nom || nameParts.prenom) {
-                    Object.assign(data, nameParts);
-                    break;
-                }
-            }
-        }
-        
-        // Strategy 2: Look for labeled fields
-        const fieldMappings = {
-            'date de naissance': 'date_naissance',
-            'né(e) le': 'date_naissance',
-            'né(e)': 'date_naissance',
-            'birthdate': 'date_naissance',
-            'tél (portable)': 'telephone',
-            'tél (fixe)': 'telephone',
-            'téléphone': 'telephone',
-            'phone': 'telephone',
-            'mobile': 'telephone',
-            'portable': 'telephone',
-            'email': 'email',
-            'e-mail': 'email',
-            'adresse': 'adresse',
-            'address': 'adresse',
-            'code postal': 'code_postal',
-            'ville': 'ville',
-            'city': 'ville',
-            'sécurité sociale': 'numero_secu',
-            'n° sécu': 'numero_secu',
-            'nir': 'numero_secu'
-            // Note: 'lieu de naissance' (birthplace) is not mapped as it differs from 'ville' (current city)
-        };
-        
-        // Search for all text nodes that might be labels
-        const allElements = document.querySelectorAll('div, span, p, td, th, label, dt, dd');
-        
-        allElements.forEach(element => {
-            const text = element.textContent.toLowerCase().trim();
-            
-            for (const [label, field] of Object.entries(fieldMappings)) {
-                if (text.includes(label) && !data[field]) {
-                    // Look for value in next sibling or child
-                    const value = findValueNearElement(element, label);
-                    if (value) {
-                        data[field] = value;
-                    }
-                }
-            }
-        });
-        
-        // Strategy 3: Look for input fields with patient data
-        const inputs = document.querySelectorAll('input[type="text"], input[type="email"], input[type="tel"]');
-        inputs.forEach(input => {
-            const name = (input.name || input.id || '').toLowerCase();
-            const value = input.value.trim();
-            
-            if (!value) return;
-            
-            if ((name.includes('firstname') || name.includes('prenom')) && !data.prenom) {
-                data.prenom = value;
-            } else if ((name.includes('lastname') || name.includes('nom')) && !data.nom) {
-                data.nom = value;
-            } else if (name.includes('birth') && !data.date_naissance) {
-                data.date_naissance = value;
-            } else if ((name.includes('phone') || name.includes('tel')) && !data.telephone) {
-                data.telephone = value;
-            } else if (name.includes('email') && !data.email) {
-                data.email = value;
-            } else if (name.includes('address') && !data.adresse) {
-                data.adresse = value;
-            } else if ((name.includes('zip') || name.includes('postal')) && !data.code_postal) {
-                data.code_postal = value;
-            } else if (name.includes('city') && !data.ville) {
-                data.ville = value;
-            }
-        });
-        
-        console.log('Extracted patient data:', data);
-        return data;
     }
-    
-    // Parse name from text (handles various formats)
-    function parseNameFromText(text) {
-        const result = { civilite: '', nom: '', prenom: '' };
-        
-        // Remove common prefixes
-        text = text.replace(/^(Patient|Dossier|Medical record)\s*:\s*/i, '').trim();
-        
-        // Check for civility (M., Mme, etc.)
-        const civilityMatch = text.match(/^(M\.|Mme|Mlle|Mr|Mrs|Ms)\.?\s+/i);
-        if (civilityMatch) {
-            result.civilite = civilityMatch[1];
-            text = text.substring(civilityMatch[0].length).trim();
-        }
-        
-        // Split by spaces
-        const parts = text.split(/\s+/).filter(p => p.length > 0);
-        
-        if (parts.length >= 2) {
-            // Assume "Prénom NOM" or "NOM Prénom"
-            // French names: typically uppercase = NOM, mixed case = Prénom
-            // Check if part contains actual letters before applying uppercase test
-            const hasLetters = (str) => /[a-zA-Z]/.test(str);
-            const isAllUppercase = (str) => hasLetters(str) && str === str.toUpperCase() && str === str.toUpperCase();
-            
-            if (isAllUppercase(parts[parts.length - 1])) {
-                // Last part is uppercase, likely NOM
-                result.nom = parts[parts.length - 1];
-                result.prenom = parts.slice(0, -1).join(' ');
-            } else if (isAllUppercase(parts[0])) {
-                // First part is uppercase, likely NOM
-                result.nom = parts[0];
-                result.prenom = parts.slice(1).join(' ');
-            } else {
-                // Default: assume "Prénom NOM"
-                result.prenom = parts.slice(0, -1).join(' ');
-                result.nom = parts[parts.length - 1];
-            }
-        } else if (parts.length === 1) {
-            result.nom = parts[0];
-        }
-        
-        return result;
-    }
-    
-    // Find value near a label element
-    function findValueNearElement(element, label) {
-        // Try next sibling
-        let sibling = element.nextElementSibling;
-        if (sibling && sibling.textContent.trim() && !sibling.textContent.toLowerCase().includes(label)) {
-            return sibling.textContent.trim();
-        }
-        
-        // Try parent's next sibling
-        const parent = element.parentElement;
-        if (parent) {
-            sibling = parent.nextElementSibling;
-            if (sibling && sibling.textContent.trim()) {
-                return sibling.textContent.trim();
-            }
-        }
-        
-        // Try looking in the same row (table structure)
-        const row = element.closest('tr');
-        if (row) {
-            const cells = row.querySelectorAll('td');
-            if (cells.length >= 2) {
-                return cells[1].textContent.trim();
-            }
-        }
-        
-        // Try looking within the element itself (after the label)
-        const fullText = element.textContent.trim();
-        if (fullText.length > label.length + 2) {
-            const afterLabel = fullText.substring(fullText.toLowerCase().indexOf(label) + label.length).trim();
-            // Remove common separators
-            return afterLabel.replace(/^[:：\s]+/, '').trim();
-        }
-        
-        return null;
-    }
-    
-    // Create floating button
+
+    // create floating button to send data to popup (unchanged behavior)
     function createFloatingButton() {
-        // Check if button already exists
-        if (document.getElementById(BUTTON_CONTAINER_ID)) {
-            return;
-        }
-        
-        // Create container
+        if (document.getElementById(BUTTON_CONTAINER_ID)) return;
         const container = document.createElement('div');
         container.id = BUTTON_CONTAINER_ID;
-        
-        // Create button
-        const button = document.createElement('button');
-        button.id = BUTTON_ID;
-        button.innerHTML = '📋 Adresser ce patient';
-        button.title = 'Ouvrir le widget d\'adressage avec les données du patient';
-        
-        button.addEventListener('click', () => {
-            handleButtonClick();
+        container.style.position = 'fixed';
+        container.style.bottom = '18px';
+        container.style.right = '18px';
+        container.style.zIndex = '999999';
+        const btn = document.createElement('button');
+        btn.id = BUTTON_ID;
+        btn.textContent = '📋 Adresser ce patient';
+        Object.assign(btn.style, { background: '#2563EB', color: '#fff', border: 'none', padding: '10px 14px', borderRadius: '8px', cursor: 'pointer' });
+        btn.addEventListener('click', () => {
+            const data = extractPatient();
+            try {
+                if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+                    chrome.runtime.sendMessage({ action: 'patientDataExtracted', data });
+                }
+            } catch (e) { }
+            try { chrome.storage.local.set({ lastExtractedPatient: data, extractionTimestamp: Date.now() }); } catch (e) { }
+            // quick visual feedback
+            const n = document.createElement('div'); n.style.position = 'fixed'; n.style.bottom = '80px'; n.style.right = '18px'; n.style.background = '#222'; n.style.color = '#fff'; n.style.padding = '8px'; n.style.borderRadius = '6px'; n.style.zIndex = '999999'; n.textContent = 'Données patient extraites'; document.body.appendChild(n); setTimeout(() => n.remove(), 2000);
         });
-        
-        container.appendChild(button);
+        container.appendChild(btn);
         document.body.appendChild(container);
-        
-        floatingButton = button;
-        console.log('Floating button created');
     }
-    
-    // Handle button click
-    function handleButtonClick() {
-        console.log('Button clicked - extracting patient data');
-        patientData = extractPatientData();
-        
-        // Send message to extension popup
-        chrome.runtime.sendMessage({
-            action: 'patientDataExtracted',
-            data: patientData
-        }, (response) => {
-            console.log('Message sent to extension:', response);
-        });
-        
-        // Also store in chrome.storage for popup to retrieve
-        chrome.storage.local.set({ 
-            lastExtractedPatient: patientData,
-            extractionTimestamp: Date.now()
-        }, () => {
-            console.log('Patient data saved to storage');
-            // Show feedback
-            showNotification('Données patient extraites ! Cliquez sur l\'icône de l\'extension.');
-        });
-    }
-    
-    // Show notification
-    function showNotification(message) {
-        const notification = document.createElement('div');
-        notification.className = 'widget-adressage-notification';
-        notification.textContent = message;
-        document.body.appendChild(notification);
-        
-        // Auto-remove after 3 seconds
-        setTimeout(() => {
-            notification.classList.add('fade-out');
-            setTimeout(() => notification.remove(), 300);
-        }, 3000);
-    }
-    
-    // Initialize
-    function init() {
-        console.log('Initializing content script...');
-        
-        // Check if we're on a patient page
-        if (isPatientPage()) {
-            console.log('Patient page detected');
-            createFloatingButton();
-        } else {
-            console.log('Not a patient page, button not created');
-        }
-        
-        // Listen for messages from popup
-        chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-            if (request.action === 'extractPatientData') {
-                console.log('Received request to extract patient data');
-                const data = extractPatientData();
-                sendResponse({ success: true, data: data });
+
+    // expose message listener for popup sendMessage
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
+        chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
+            if (req && req.action === 'extractPatientData') {
+                const data = extractPatient();
+                sendResponse({ success: true, data });
             }
-            return true; // Keep channel open for async response
+            return true;
         });
     }
-    
-    // Wait for DOM to be ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
-    
-    // Watch for SPA navigation using a more efficient approach
-    // Instead of observing all DOM changes, we check URL periodically
-    let lastUrl = window.location.href;
-    
-    // Check URL every 500ms (more efficient than observing all DOM mutations)
-    setInterval(() => {
-        const currentUrl = window.location.href;
-        if (currentUrl !== lastUrl) {
-            lastUrl = currentUrl;
-            console.log('URL changed, re-initializing...');
-            // Remove old button
-            const oldButton = document.getElementById(BUTTON_CONTAINER_ID);
-            if (oldButton) oldButton.remove();
-            // Re-initialize
-            setTimeout(init, 1000); // Wait for page to load
+
+    // init: add button if on patient page
+    try {
+        if ((/\/patients\/\d+|\/patient\/|\/dossier|\/appointments\//i).test(location.href)) {
+            createFloatingButton();
         }
-    }, 500);
-    
+        // SPA navigation: simple url polling
+        let lastUrl = location.href;
+        setInterval(() => {
+            if (location.href !== lastUrl) {
+                lastUrl = location.href;
+                const existing = document.getElementById(BUTTON_CONTAINER_ID);
+                if (existing) existing.remove();
+                setTimeout(() => { if ((/\/patients\/\d+|\/patient\/|\/dossier|\/appointments\//i).test(location.href)) createFloatingButton(); }, 700);
+            }
+        }, 500);
+    } catch (e) { log('init error', e); }
+
 })();

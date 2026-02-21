@@ -5,7 +5,8 @@
   "description": "Widget d'adressage patient depuis Doctolib - Extension Chrome pour l'ophtalmologie",
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "scripting"
   ],
   "host_permissions": [
     "https://*.doctolib.fr/*"
