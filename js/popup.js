@@ -1,18 +1,72 @@
-// popup.js - Extension popup logic (complet, prêt à coller)
-//
-// Comportement :
-// - Au chargement du popup, tente d'extraire automatiquement les données patient.
-// - Stratégie : sendMessage -> inject content-script -> executeScript(func) (fallback).
-// - Affiche les champs : civilite, prenom, nom, date_naissance, telephone, email.
-// - Stocke le résultat dans chrome.storage.local[lastExtractedPatient].
-//
-// Remplace complètement js/popup.js par ce fichier puis reload l'extension.
+// popup.js - Extension popup logic (modifié)
+// - Ajout : peupler les dropdowns (motif, urgence) selon tes demandes
+// - Ajout : listener pour "✓ Utiliser ces données" qui récupère lastExtractedPatient
+//           et remplit le formulaire / sélectionne le patient (via CSVParser).
+// - Conserve la logique d'extraction (sendMessage / inject / executeScript)
+// Usage : remplacer complètement js/popup.js par ce fichier puis reload l'extension.
 (function () {
     'use strict';
 
     // Petit utilitaire DOM
     function q(sel) { return document.querySelector(sel); }
     function log(...args) { try { console.log('[Popup]', ...args); } catch (e) { } }
+
+    // Populate les selects selon ta demande
+    function populateSelects() {
+        // Motifs demandés (labels utilisateur). Les valeurs doivent correspondre aux clés
+        // connues par templates.js / EmailHandler quand possible, sinon 'other'.
+        const motifs = [
+            { value: 'other', label: 'Chirurgie réfractive' },           // pas de template dédié -> other
+            { value: 'cataract', label: 'Chirurgie de la cataracte' },   // utilise template 'cataract'
+            { value: 'intravitreal-injection', label: 'IVT (Injection intravitréenne)' }, // existing key
+            { value: 'glaucoma', label: 'Glaucome' },                   // existing key
+            { value: 'other', label: 'Chirurgie vitréorétinienne' },    // pas de template dédié -> other
+            { value: 'laser', label: 'Laser (YAG / Argon)' },           // utilise template 'laser'
+            { value: 'other', label: 'Autre (à préciser)' }            // fallback
+        ];
+
+        const referralReasonSelect = document.getElementById('referralReason');
+        if (referralReasonSelect) {
+            // vider existant
+            referralReasonSelect.innerHTML = '';
+            // ajouter option vide
+            const emptyOpt = document.createElement('option');
+            emptyOpt.value = '';
+            emptyOpt.textContent = '-- Sélectionner --';
+            referralReasonSelect.appendChild(emptyOpt);
+
+            motifs.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.value;
+                opt.textContent = m.label;
+                referralReasonSelect.appendChild(opt);
+            });
+        }
+
+        // Urgences demandées : mapping sur valeurs existantes (très-urgent/urgent/normal)
+        // pour rester compatibles avec EmailHandler (qui attend keys comme 'very-urgent', 'urgent', ...)
+        const urgences = [
+            { value: 'very-urgent', label: '🔴 Rouge - Rapide (dans la semaine)' }, // map to very-urgent
+            { value: 'urgent', label: '🟠 Orange - 2 semaines' },                  // map to urgent
+            { value: 'normal', label: '🟢 Vert - Dans le mois' }                   // map to normal
+        ];
+
+        const urgencySelect = document.getElementById('urgencyLevel');
+        if (urgencySelect) {
+            // garder la première option vide puis remplacer le reste
+            const currentEmpty = urgencySelect.querySelector('option[value=""]');
+            urgencySelect.innerHTML = '';
+            urgencySelect.appendChild(currentEmpty || (function () {
+                const e = document.createElement('option'); e.value = ''; e.textContent = '-- Sélectionner --'; return e;
+            })());
+            urgences.forEach(u => {
+                const opt = document.createElement('option');
+                opt.value = u.value;
+                opt.textContent = u.label;
+                urgencySelect.appendChild(opt);
+            });
+        }
+    }
 
     // Affiche les données extraites dans le popup
     function displayAutoExtractedData(data) {
@@ -263,7 +317,7 @@
         }
     }
 
-    // Listen for pushed messages from content script (if content script pushes data)
+    // Listener messages pushed depuis content script (si le content-script pousse la data)
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
         chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             log('Popup received message:', request);
@@ -275,26 +329,136 @@
         });
     }
 
+    // Récupère lastExtractedPatient et applique au formulaire / CSVParser
+    function applyExtractedPatientAndOpenForm(data) {
+        if (!data) return;
+        try {
+            // Si CSVParser disponible, on lui donne le patient et on appelle l'affichage
+            if (typeof CSVParser !== 'undefined' && typeof CSVParser.normalizePatientData === 'function') {
+                // normaliser si possible (pour garder clefs attendues)
+                const normalized = CSVParser.normalizePatientData(data);
+                CSVParser.selectedPatient = normalized;
+                // Mettre à jour l'affichage via CSVParser
+                if (typeof CSVParser.displaySelectedPatient === 'function') {
+                    CSVParser.displaySelectedPatient();
+                }
+            } else if (typeof CSVParser !== 'undefined') {
+                CSVParser.selectedPatient = data;
+                if (typeof CSVParser.displaySelectedPatient === 'function') CSVParser.displaySelectedPatient();
+            } else {
+                // fallback: remplir zone selectedPatientInfo directement
+                const infoDiv = document.getElementById('selectedPatientInfo');
+                if (infoDiv) {
+                    let html = '';
+                    html += `<div class="patient-info-item"><span class="patient-info-label">Identité :</span> ${data.civilite || ''} ${data.prenom || ''} ${data.nom || ''}</div>`;
+                    if (data.date_naissance) html += `<div class="patient-info-item"><span class="patient-info-label">Date de naissance :</span> ${data.date_naissance}</div>`;
+                    if (data.telephone) html += `<div class="patient-info-item"><span class="patient-info-label">Téléphone :</span> ${data.telephone}</div>`;
+                    if (data.email) html += `<div class="patient-info-item"><span class="patient-info-label">Email :</span> ${data.email}</div>`;
+                    infoDiv.innerHTML = html;
+                }
+            }
+
+            // Ouvrir la section formulaire et scroller
+            const referralSection = document.getElementById('referralSection');
+            if (referralSection) {
+                referralSection.style.display = 'block';
+                referralSection.scrollIntoView({ behavior: 'smooth' });
+            }
+
+            // Pré-remplir motif & degré d'urgence par défaut
+            const referralReasonSelect = document.getElementById('referralReason');
+            const urgencySelect = document.getElementById('urgencyLevel');
+            const letterContent = document.getElementById('letterContent');
+
+            if (referralReasonSelect) {
+                // par défaut sélectionne 'cataract' si la page contient 'cataract' dans le nom/métadonnees,
+                // sinon 'other'
+                const lname = ((data.nom || '') + ' ' + (data.prenom || '') + ' ' + (data.date_naissance || '') + ' ' + (data.email || '')).toLowerCase();
+                if (lname.includes('cataract') || lname.includes('cataracte')) {
+                    referralReasonSelect.value = 'cataract';
+                } else if (lname.includes('glaucome') || lname.includes('glaucoma')) {
+                    referralReasonSelect.value = 'glaucoma';
+                } else {
+                    referralReasonSelect.value = 'other';
+                }
+                // remplir lettre si possible
+                if (typeof getTemplate === 'function' && letterContent) {
+                    letterContent.value = getTemplate(referralReasonSelect.value);
+                }
+            }
+
+            if (urgencySelect) {
+                // par défaut 'normal' -> vert (dans le mois)
+                urgencySelect.value = 'normal';
+            }
+        } catch (e) {
+            console.error('applyExtractedPatientAndOpenForm error', e);
+        }
+    }
+
     // DOM ready
     document.addEventListener('DOMContentLoaded', function () {
-        log('Popup DOMContentLoaded - try auto extract');
+        log('Popup DOMContentLoaded - init');
+
+        // Peupler les selects personnalisés
+        populateSelects();
+
+        // Essayer d'extraire automatiquement les données (content script / fallback)
         tryAutoExtract();
 
-        // UI hooks: template select and send button (if present)
+        // Hooker le bouton "Utiliser ces données"
+        const useBtn = document.getElementById('useAutoExtractedBtn');
+        if (useBtn) {
+            useBtn.addEventListener('click', function () {
+                try {
+                    // récupérer depuis chrome.storage.local (clé lastExtractedPatient)
+                    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                        chrome.storage.local.get(['lastExtractedPatient'], (res) => {
+                            const data = res && res.lastExtractedPatient ? res.lastExtractedPatient : null;
+                            if (!data) {
+                                alert("Aucune donnée patient disponible à utiliser.");
+                                return;
+                            }
+                            applyExtractedPatientAndOpenForm(data);
+                        });
+                    } else {
+                        // fallback localStorage
+                        const stored = localStorage.getItem('lastExtractedPatient');
+                        const data = stored ? JSON.parse(stored) : null;
+                        if (!data) {
+                            alert("Aucune donnée patient disponible à utiliser.");
+                            return;
+                        }
+                        applyExtractedPatientAndOpenForm(data);
+                    }
+                } catch (err) {
+                    console.error('useAutoExtractedBtn click error', err);
+                    alert('Erreur interne lors de l\'utilisation des données.');
+                }
+            });
+        }
+
+        // UI hooks : mise à jour du textarea lorsque le motif change (utilise getTemplate si présent)
         const referralReasonSelect = document.getElementById('referralReason');
         const letterContentTextarea = document.getElementById('letterContent');
         if (referralReasonSelect && letterContentTextarea && typeof getTemplate === 'function') {
             referralReasonSelect.addEventListener('change', function () {
                 const selectedReason = this.value;
                 if (selectedReason) {
-                    const template = getTemplate(selectedReason);
-                    letterContentTextarea.value = template;
+                    try {
+                        const template = getTemplate(selectedReason);
+                        letterContentTextarea.value = template;
+                    } catch (e) {
+                        // si getTemplate ne gère pas la clé, propose vide
+                        letterContentTextarea.value = '';
+                    }
                 } else {
                     letterContentTextarea.value = '';
                 }
             });
         }
 
+        // Hook sur le bouton envoyer (conserve comportement existant)
         const sendEmailBtn = document.getElementById('sendEmailBtn');
         if (sendEmailBtn) {
             sendEmailBtn.addEventListener('click', function (e) {
