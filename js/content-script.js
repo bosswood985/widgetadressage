@@ -59,7 +59,7 @@
         if (!textToSearch) return '';
         const m1 = textToSearch.match(/(\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b)/);
         if (m1) return m1[1].trim();
-        const m2 = textToSearch.match(/\b(\d{1,2}\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\s+\d{4})\b/i);
+        const m2 = textToSearch.match(/\b(\d{1,2}\s+(janvier|f\u00e9vrier|fevrier|mars|avril|mai|juin|juillet|ao\u00fbt|aout|septembre|octobre|novembre|d\u00e9cembre|decembre)\s+\d{4})\b/i);
         if (m2) return m2[1].trim();
         const m3 = textToSearch.match(/([FM]\s*,\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i);
         if (m3) return m3[1].trim();
@@ -111,13 +111,16 @@
 
         const container = document.createElement('div');
         container.id = BUTTON_CONTAINER_ID;
-        // Position fixe en haut à gauche, sous la barre de navigation Doctolib
+
+        // Position fixe : haut gauche, dans la zone du cercle rouge
+        // top: 195px = sous l'avatar patient (barre nav ~60px + header ~130px)
+        // left: 8px = colle au bord gauche du panneau
         Object.assign(container.style, {
             position: 'fixed',
-            top: '108px',
+            top: '195px',
             left: '8px',
             zIndex: '999999',
-            width: '290px'
+            width: '305px'
         });
 
         const btn = document.createElement('button');
@@ -133,8 +136,9 @@
             fontWeight: 'bold',
             fontSize: '13px',
             width: '100%',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-            letterSpacing: '0.3px'
+            textAlign: 'center',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
+            letterSpacing: '0.2px'
         });
 
         btn.addEventListener('mouseenter', () => { btn.style.background = '#B91C1C'; });
@@ -142,26 +146,28 @@
 
         btn.addEventListener('click', () => {
             const data = extractPatient();
+
+            // 1. Sauvegarde les donnees
             try {
                 chrome.storage.local.set({ lastExtractedPatient: data, extractionTimestamp: Date.now() });
             } catch (e) { }
+
+            // 2. Demande au background d'ouvrir le popup
             try {
-                if (chrome && chrome.runtime && chrome.runtime.sendMessage) {
-                    chrome.runtime.sendMessage({ action: 'patientDataExtracted', data });
-                }
+                chrome.runtime.sendMessage({ action: 'openPopup', data: data }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        // Si openPopup echoue (pas supporte), ouvre popup.html dans nouvel onglet
+                        chrome.tabs.create({ url: chrome.runtime.getURL('popup.html') });
+                    }
+                });
             } catch (e) { }
-            // Feedback visuel bref
-            const n = document.createElement('div');
-            n.style.cssText = 'position:fixed;top:148px;left:8px;background:#15803d;color:#fff;padding:6px 14px;border-radius:6px;z-index:999999;font-weight:bold;font-size:13px;box-shadow:0 2px 6px rgba(0,0,0,0.3);';
-            n.textContent = '\u2713 Patient extrait — ouvrez le widget';
-            document.body.appendChild(n);
-            setTimeout(() => n.remove(), 2500);
         });
 
         container.appendChild(btn);
         document.body.appendChild(container);
     }
 
+    // Listener pour le popup qui demande les donnees
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
         chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
             if (req && req.action === 'extractPatientData') {
@@ -171,6 +177,7 @@
         });
     }
 
+    // Init
     try {
         if ((/\/patients\/\d+|\/patient\/|\/dossier|\/appointments\//i).test(location.href)) {
             createFloatingButton();

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Widget Adressage Patient",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Widget d'adressage patient depuis Doctolib - Extension Chrome pour l'ophtalmologie",
   "permissions": [
     "activeTab",
@@ -19,6 +19,9 @@
       "128": "icons/icon128.png"
     },
     "default_title": "Widget Adressage Patient"
+  },
+  "background": {
+    "service_worker": "js/background.js"
   },
   "content_scripts": [
     {
