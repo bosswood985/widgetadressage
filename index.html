@@ -7,76 +7,50 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <!-- Header -->
     <header class="header">
         <div class="container">
             <h1>Widget d'Adressage Patient</h1>
             <p class="subtitle">Ophtalmologie</p>
-            <button id="settingsBtn" class="settings-btn">⚙️ Paramètres</button>
+            <!-- Bouton paramètres SUPPRIMÉ volontairement -->
         </div>
     </header>
 
-    <!-- Main Content -->
     <main class="container">
-        <!-- Section 1: Import CSV -->
+
+        <!-- Section 1: Données Patient (Doctolib uniquement) -->
         <section class="card">
-            <h2>1. Import CSV Doctolib</h2>
-            <div class="upload-area">
-                <input type="file" id="csvFileInput" accept=".csv" hidden>
-                <button id="uploadBtn" class="btn btn-primary">📁 Importer un fichier CSV</button>
-                <p class="help-text">Format attendu : CSV Doctolib avec colonnes nom, prénom, date_naissance, etc.</p>
+            <h2>1. Données Patient</h2>
+            <div id="autoExtractedSection" style="display: none;">
+                <div class="selected-patient">
+                    <h3>Patient détecté (Doctolib)</h3>
+                    <div id="autoExtractedPatientInfo"></div>
+                    <button id="useAutoExtractedBtn" class="btn btn-primary" style="margin-top: 1rem;">✓ Utiliser ces données</button>
+                </div>
+            </div>
+            <div id="noPatientMsg" class="help-text" style="margin-top: 0.5rem;">
+                Ouvrez la fiche d'un patient sur Doctolib pour détecter automatiquement ses données.
             </div>
         </section>
 
-        <!-- Section 2: Liste des patients -->
-        <section class="card" id="patientsSection" style="display: none;">
-            <h2>2. Sélection du Patient</h2>
-            <div class="search-box">
-                <input type="text" id="searchInput" placeholder="🔍 Rechercher un patient (nom, prénom)..." class="search-input">
-            </div>
-            <div class="table-container">
-                <table id="patientsTable">
-                    <thead>
-                        <tr>
-                            <th>Civilité</th>
-                            <th>Nom</th>
-                            <th>Prénom</th>
-                            <th>Date de naissance</th>
-                            <th>Téléphone</th>
-                            <th>Email</th>
-                        </tr>
-                    </thead>
-                    <tbody id="patientsTableBody">
-                    </tbody>
-                </table>
-            </div>
-            <div id="patientCount" class="patient-count"></div>
-        </section>
-
-        <!-- Section 3: Formulaire d'adressage -->
+        <!-- Section 2: Formulaire d'adressage -->
         <section class="card" id="referralSection" style="display: none;">
-            <h2>3. Formulaire d'Adressage</h2>
-            
-            <!-- Patient sélectionné -->
+            <h2>2. Formulaire d'Adressage</h2>
+
             <div class="selected-patient" id="selectedPatientDisplay">
                 <h3>Patient sélectionné</h3>
                 <div id="selectedPatientInfo"></div>
             </div>
 
-            <!-- Degré d'urgence -->
             <div class="form-group">
                 <label for="urgencyLevel">Degré d'urgence *</label>
                 <select id="urgencyLevel" class="form-select" required>
                     <option value="">-- Sélectionner --</option>
-                    <option value="very-urgent">🔴 Très Urgent - Prise en charge immédiate nécessaire</option>
-                    <option value="urgent">🟠 Urgent - Sous 48h</option>
-                    <option value="semi-urgent">🟡 Semi-urgent - Sous 1 semaine</option>
-                    <option value="normal">🟢 Normal - Consultation programmée</option>
-                    <option value="follow-up">🔵 Suivi - Consultation de suivi</option>
+                    <option value="very-urgent">🔴 Rouge - Rapide (dans la semaine)</option>
+                    <option value="urgent">🟠 Orange - 2 semaines</option>
+                    <option value="normal">🟢 Vert - Dans le mois</option>
                 </select>
             </div>
 
-            <!-- Type de prise en charge -->
             <div class="form-group">
                 <label for="careType">Type de prise en charge souhaitée *</label>
                 <select id="careType" class="form-select" required>
@@ -95,31 +69,28 @@
                 <input type="text" id="careTypeOther" class="form-input" placeholder="Préciser le type de prise en charge...">
             </div>
 
-            <!-- Motif d'adressage -->
             <div class="form-group">
                 <label for="referralReason">Motif d'adressage *</label>
                 <select id="referralReason" class="form-select" required>
                     <option value="">-- Sélectionner --</option>
-                    <option value="cataract">Cataracte</option>
+                    <option value="other">Chirurgie réfractive</option>
+                    <option value="cataract">Chirurgie de la cataracte</option>
+                    <option value="intravitreal-injection">IVT (Injection intravitréenne)</option>
                     <option value="glaucoma">Glaucome</option>
-                    <option value="amd">DMLA</option>
-                    <option value="diabetic-retinopathy">Rétinopathie diabétique</option>
-                    <option value="retinal-detachment">Décollement de rétine</option>
-                    <option value="keratoconus">Kératocône</option>
-                    <option value="strabismus">Strabisme</option>
-                    <option value="eyelid-pathology">Pathologie palpébrale</option>
-                    <option value="other">Autre</option>
+                    <option value="other">Chirurgie vitréorétinienne</option>
+                    <option value="laser">Laser (YAG / Argon)</option>
+                    <option value="other">Autre (à préciser)</option>
                 </select>
             </div>
 
-            <!-- Texte du courrier -->
             <div class="form-group">
                 <label for="letterContent">Courrier d'adressage *</label>
-                <textarea id="letterContent" class="form-textarea" rows="10" placeholder="Le texte type sera généré automatiquement selon le motif sélectionné. Vous pouvez le personnaliser." required></textarea>
+                <textarea id="letterContent" class="form-textarea" rows="10"
+                    placeholder="Le texte type sera généré automatiquement selon le motif sélectionné. Vous pouvez le personnaliser."
+                    required></textarea>
                 <p class="help-text">Les champs entre crochets [...] sont à compléter manuellement</p>
             </div>
 
-            <!-- Boutons d'action -->
             <div class="actions">
                 <button id="previewBtn" class="btn btn-secondary">👁️ Prévisualiser</button>
                 <button id="sendEmailBtn" class="btn btn-primary">📧 Envoyer par Email</button>
@@ -127,24 +98,27 @@
         </section>
     </main>
 
-    <!-- Modal Paramètres -->
+    <!-- Modal Paramètres praticien (sans champ email destinataire) -->
     <div id="settingsModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Paramètres</h2>
+                <h2>⚙️ Votre identification</h2>
                 <button class="modal-close" id="closeSettingsBtn">&times;</button>
             </div>
             <div class="modal-body">
+                <p class="help-text" style="margin-bottom:1rem;">
+                    Ces informations apparaîtront dans l'en-tête de vos courriers d'adressage.
+                </p>
                 <div class="form-group">
-                    <label for="doctorName">Nom du praticien *</label>
+                    <label for="doctorName">Votre nom *</label>
                     <input type="text" id="doctorName" class="form-input" placeholder="Dr. Nom Prénom">
                 </div>
                 <div class="form-group">
                     <label for="doctorSpecialty">Spécialité</label>
-                    <input type="text" id="doctorSpecialty" class="form-input" placeholder="Médecin généraliste" value="Médecin généraliste">
+                    <input type="text" id="doctorSpecialty" class="form-input" value="Ophtalmologue">
                 </div>
                 <div class="form-group">
-                    <label for="doctorRPPS">RPPS</label>
+                    <label for="doctorRPPS">N° RPPS</label>
                     <input type="text" id="doctorRPPS" class="form-input" placeholder="Numéro RPPS">
                 </div>
                 <div class="form-group">
@@ -155,10 +129,7 @@
                     <label for="practicePhone">Téléphone</label>
                     <input type="tel" id="practicePhone" class="form-input" placeholder="01 02 03 04 05">
                 </div>
-                <div class="form-group">
-                    <label for="recipientEmail">Email du destinataire (ophtalmo) *</label>
-                    <input type="email" id="recipientEmail" class="form-input" placeholder="ophtalmo@example.com">
-                </div>
+                <!-- Champ email destinataire SUPPRIMÉ — hardcodé dans email.js -->
             </div>
             <div class="modal-footer">
                 <button id="saveSettingsBtn" class="btn btn-primary">💾 Enregistrer</button>
@@ -182,7 +153,7 @@
         </div>
     </div>
 
-    <!-- Scripts -->
+    <!-- Scripts — ordre identique à l'original, csv-parser.js conservé -->
     <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
     <script src="js/templates.js"></script>
     <script src="js/settings.js"></script>
