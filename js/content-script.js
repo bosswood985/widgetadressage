@@ -154,19 +154,40 @@
         };
     }
 
-    // create floating button to send data to popup (unchanged behavior)
+    // Crée le bouton ROUGE positionné dans le panneau gauche patient (haut gauche)
     function createFloatingButton() {
         if (document.getElementById(BUTTON_CONTAINER_ID)) return;
+
         const container = document.createElement('div');
         container.id = BUTTON_CONTAINER_ID;
-        container.style.position = 'fixed';
-        container.style.bottom = '18px';
-        container.style.right = '18px';
-        container.style.zIndex = '999999';
+
+        // Essaye d'insérer le bouton DANS le panneau gauche patient (juste après l'avatar/photo)
+        // Sélecteurs connus du panneau gauche Doctolib
+        const targetPanel = document.querySelector(
+            '.dl-left-panel-patient-card-info, .dl-left-panel-patient-card, .patient-card-header, .patient-identity'
+        );
+
         const btn = document.createElement('button');
         btn.id = BUTTON_ID;
         btn.textContent = '📋 Adresser ce patient';
-        Object.assign(btn.style, { background: '#2563EB', color: '#fff', border: 'none', padding: '10px 14px', borderRadius: '8px', cursor: 'pointer' });
+        Object.assign(btn.style, {
+            background: '#DC2626',       // Rouge
+            color: '#fff',
+            border: 'none',
+            padding: '8px 14px',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontWeight: 'bold',
+            fontSize: '13px',
+            display: 'block',
+            width: '100%',
+            marginTop: '10px',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.25)'
+        });
+
+        btn.addEventListener('mouseenter', () => { btn.style.background = '#B91C1C'; });
+        btn.addEventListener('mouseleave', () => { btn.style.background = '#DC2626'; });
+
         btn.addEventListener('click', () => {
             const data = extractPatient();
             try {
@@ -176,10 +197,28 @@
             } catch (e) { }
             try { chrome.storage.local.set({ lastExtractedPatient: data, extractionTimestamp: Date.now() }); } catch (e) { }
             // quick visual feedback
-            const n = document.createElement('div'); n.style.position = 'fixed'; n.style.bottom = '80px'; n.style.right = '18px'; n.style.background = '#222'; n.style.color = '#fff'; n.style.padding = '8px'; n.style.borderRadius = '6px'; n.style.zIndex = '999999'; n.textContent = 'Données patient extraites'; document.body.appendChild(n); setTimeout(() => n.remove(), 2000);
+            const n = document.createElement('div');
+            n.style.cssText = 'position:fixed;top:60px;left:20px;background:#DC2626;color:#fff;padding:8px 14px;border-radius:6px;z-index:999999;font-weight:bold;box-shadow:0 2px 6px rgba(0,0,0,0.3);';
+            n.textContent = '✓ Données patient extraites';
+            document.body.appendChild(n);
+            setTimeout(() => n.remove(), 2000);
         });
+
         container.appendChild(btn);
-        document.body.appendChild(container);
+
+        if (targetPanel) {
+            // Insertion dans le panneau gauche = apparaît exactement là où est le cercle rouge
+            targetPanel.appendChild(container);
+        } else {
+            // Fallback : coin supérieur gauche en position fixe si le panneau n'est pas trouvé
+            Object.assign(container.style, {
+                position: 'fixed',
+                top: '80px',
+                left: '70px',
+                zIndex: '999999'
+            });
+            document.body.appendChild(container);
+        }
     }
 
     // expose message listener for popup sendMessage
